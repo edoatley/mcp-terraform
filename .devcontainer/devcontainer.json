@@ -1,0 +1,44 @@
+{
+  "name": "Spring Boot 4 Todo API",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "features": {},
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "vscjava.vscode-java-pack",
+        "vmware.vscode-spring-boot",
+        "vscjava.vscode-spring-boot-dashboard",
+        "vscjava.vscode-maven",
+        "bufbuild.buf",
+        "grpc.grpc"
+      ],
+      "settings": {
+        "java.configuration.updateBuildConfiguration": "automatic",
+        "java.compile.nullAnalysis.mode": "automatic",
+        "java.configuration.runtimes": [
+          {
+            "name": "JavaSE-21",
+            "path": "/usr/lib/jvm/java-21-openjdk-amd64"
+          }
+        ]
+      }
+    }
+  },
+  "forwardPorts": [8080, 9090],
+  "portsAttributes": {
+    "8080": {
+      "label": "REST API",
+      "onAutoForward": "notify"
+    },
+    "9090": {
+      "label": "gRPC",
+      "onAutoForward": "notify"
+    }
+  },
+  "postCreateCommand": "mvn clean install -DskipTests",
+  "remoteUser": "vscode"
+}
+

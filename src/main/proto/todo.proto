@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package com.example.todo;
+
+option java_multiple_files = true;
+option java_package = "com.example.todo.proto";
+option java_outer_classname = "TodoProto";
+
+// Todo message
+message Todo {
+  string id = 1;
+  string title = 2;
+  string description = 3;
+  bool completed = 4;
+}
+
+// Request/Response messages
+message GetTodoRequest {
+  string id = 1;
+}
+
+message GetTodoResponse {
+  Todo todo = 1;
+}
+
+message ListTodosRequest {
+}
+
+message ListTodosResponse {
+  repeated Todo todos = 1;
+}
+
+message CreateTodoRequest {
+  string title = 1;
+  string description = 2;
+}
+
+message CreateTodoResponse {
+  Todo todo = 1;
+}
+
+message UpdateTodoRequest {
+  string id = 1;
+  string title = 2;
+  string description = 3;
+  bool completed = 4;
+}
+
+message UpdateTodoResponse {
+  Todo todo = 1;
+}
+
+message DeleteTodoRequest {
+  string id = 1;
+}
+
+message DeleteTodoResponse {
+  bool success = 1;
+}
+
+// Todo Service
+service TodoService {
+  rpc GetTodo(GetTodoRequest) returns (GetTodoResponse);
+  rpc ListTodos(ListTodosRequest) returns (ListTodosResponse);
+  rpc CreateTodo(CreateTodoRequest) returns (CreateTodoResponse);
+  rpc UpdateTodo(UpdateTodoRequest) returns (UpdateTodoResponse);
+  rpc DeleteTodo(DeleteTodoRequest) returns (DeleteTodoResponse);
+}
+
