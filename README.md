@@ -339,6 +339,149 @@ See `src/main/proto/todo.proto` for complete protocol buffer definitions.
 - [AWS Lambda with Spring Boot](https://docs.aws.amazon.com/lambda/latest/dg/java-handler.html)
 - [Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
 
+## TODO
+
+This section contains a comprehensive list of tasks and improvements to be completed.
+
+### Testing & Quality Assurance
+
+- [ ] **Unit Tests**: Add JUnit tests for `TodoService`, `TodoController`, and `TodoGrpcController`
+- [ ] **Integration Tests**: Create integration tests for REST and gRPC endpoints
+- [ ] **Test Coverage**: Set up JaCoCo or similar tool to track test coverage (target: 80%+)
+- [ ] **Contract Testing**: Add contract tests for gRPC service definitions
+- [ ] **Load Testing**: Create load tests for Lambda function performance
+- [ ] **API Testing**: Add Postman/Newman collections or REST Assured tests
+- [ ] **Terraform Testing**: Add `terraform test` files for infrastructure validation
+
+### Data Persistence
+
+- [ ] **DynamoDB Integration**: Replace in-memory storage with DynamoDB for persistence
+  - [ ] Create DynamoDB table via Terraform
+  - [ ] Add DynamoDB SDK dependency
+  - [ ] Implement DynamoDB repository layer
+  - [ ] Add data migration scripts if needed
+- [ ] **Database Schema**: Design and document data model
+- [ ] **Connection Pooling**: Configure proper connection pooling for database
+- [ ] **Data Validation**: Add input validation and sanitization
+
+### CI/CD & Deployment
+
+- [ ] **Lambda Build Pipeline**: Create GitHub Actions workflow to build and push Docker image to ECR
+  - [ ] Build Lambda container image
+  - [ ] Push to ECR repository
+  - [ ] Update Lambda function with new image
+- [ ] **Automated Testing in CI**: Run tests in GitHub Actions before deployment
+- [ ] **Terraform Apply**: Add workflow to apply Terraform changes (with approval gates)
+- [ ] **Environment Promotion**: Set up dev → staging → prod promotion workflow
+- [ ] **Rollback Strategy**: Implement rollback mechanism for failed deployments
+- [ ] **Version Tagging**: Automatically tag releases and container images
+
+### Infrastructure & Terraform
+
+- [ ] **Backend Configuration**: Complete `terraform/backend.tf` with actual S3 bucket and DynamoDB table names
+- [ ] **API Gateway Path**: Fix API Gateway resource path to include `/api` prefix (currently missing)
+- [ ] **API Gateway Custom Domain**: Add custom domain configuration for API Gateway
+- [ ] **SSL/TLS Certificates**: Configure ACM certificates for HTTPS endpoints
+- [ ] **VPC Configuration**: Move Lambda to VPC if database access is required
+- [ ] **Security Groups**: Review and tighten security group rules
+- [ ] **IAM Roles**: Implement least-privilege IAM policies
+- [ ] **CloudWatch Logs**: Configure log retention and log groups
+- [ ] **CloudWatch Alarms**: Add alarms for Lambda errors, API Gateway 5xx errors, and ALB health
+- [ ] **X-Ray Tracing**: Enable AWS X-Ray for distributed tracing
+- [ ] **Cost Optimization**: Add cost tags and review resource sizing
+
+### Security
+
+- [ ] **API Authentication**: Implement API key or JWT authentication for REST API
+- [ ] **gRPC Authentication**: Add TLS/mTLS for gRPC endpoints
+- [ ] **CORS Configuration**: Configure CORS for API Gateway if needed
+- [ ] **Input Validation**: Add comprehensive input validation and sanitization
+- [ ] **Rate Limiting**: Implement rate limiting via API Gateway or WAF
+- [ ] **Secrets Management**: Use AWS Secrets Manager for sensitive configuration
+- [ ] **Security Headers**: Add security headers to API responses
+- [ ] **Dependency Scanning**: Add Dependabot or Snyk for dependency vulnerability scanning
+
+### Monitoring & Observability
+
+- [ ] **Structured Logging**: Implement structured logging (JSON format) with correlation IDs
+- [ ] **Metrics**: Add custom CloudWatch metrics for business logic
+- [ ] **Dashboards**: Create CloudWatch dashboards for monitoring
+- [ ] **Alerting**: Set up SNS topics and email/Slack notifications for critical alerts
+- [ ] **Health Checks**: Implement comprehensive health check endpoint (`/health`, `/ready`, `/live`)
+- [ ] **Distributed Tracing**: Integrate with AWS X-Ray for request tracing
+- [ ] **Error Tracking**: Consider integrating with Sentry or similar for error tracking
+
+### Documentation
+
+- [ ] **API Documentation**: Add OpenAPI/Swagger documentation for REST API
+- [ ] **gRPC Documentation**: Generate and publish gRPC API documentation
+- [ ] **Architecture Diagrams**: Create detailed architecture diagrams (C4 model)
+- [ ] **Runbooks**: Create operational runbooks for common tasks
+- [ ] **Deployment Guide**: Document step-by-step deployment process
+- [ ] **Troubleshooting Guide**: Expand troubleshooting section with common issues
+- [ ] **Code Comments**: Add JavaDoc comments to all public methods and classes
+
+### Application Features
+
+- [ ] **Pagination**: Add pagination support for `ListTodos` endpoint
+- [ ] **Filtering & Sorting**: Add query parameters for filtering and sorting todos
+- [ ] **Search**: Implement full-text search capability
+- [ ] **Bulk Operations**: Add bulk create/update/delete operations
+- [ ] **Todo Categories/Tags**: Extend model to support categories or tags
+- [ ] **Due Dates**: Add due date and reminder functionality
+- [ ] **User Management**: Add multi-user support with user isolation
+- [ ] **Audit Logging**: Log all create/update/delete operations
+
+### Performance & Optimization
+
+- [ ] **Caching**: Add Redis/ElastiCache for frequently accessed data
+- [ ] **Lambda Cold Start**: Optimize Lambda cold start times (consider provisioned concurrency)
+- [ ] **Connection Reuse**: Implement connection pooling for external services
+- [ ] **Async Processing**: Add async processing for long-running operations
+- [ ] **Compression**: Enable response compression for API Gateway
+- [ ] **CDN**: Consider CloudFront for static assets (if any)
+
+### gRPC Specific
+
+- [ ] **gRPC over ALB**: Verify and test gRPC functionality through ALB
+- [ ] **gRPC Reflection**: Enable gRPC reflection for easier testing
+- [ ] **gRPC Interceptors**: Add logging and error handling interceptors
+- [ ] **gRPC Health Service**: Implement gRPC health checking service
+- [ ] **Streaming Support**: Consider adding streaming RPCs if needed
+
+### Development Experience
+
+- [ ] **Local DynamoDB**: Add LocalStack or DynamoDB Local for local development
+- [ ] **Docker Compose**: Create docker-compose.yml for local development stack
+- [ ] **Pre-commit Hooks**: Add pre-commit hooks for code formatting and linting
+- [ ] **Code Formatting**: Configure Spotless or similar for consistent code formatting
+- [ ] **Linting**: Add Checkstyle or PMD for code quality checks
+- [ ] **GitHub Templates**: Add issue and PR templates
+- [ ] **Development Scripts**: Create helper scripts for common development tasks
+
+### Configuration & Environment
+
+- [ ] **Environment Variables**: Document all required environment variables
+- [ ] **Configuration Profiles**: Add Spring profiles for dev/staging/prod
+- [ ] **Feature Flags**: Implement feature flags for gradual rollouts
+- [ ] **Configuration Validation**: Add startup validation for required configuration
+
+### Error Handling & Resilience
+
+- [ ] **Error Responses**: Standardize error response format across REST and gRPC
+- [ ] **Retry Logic**: Add retry logic for transient failures
+- [ ] **Circuit Breaker**: Implement circuit breaker pattern for external dependencies
+- [ ] **Graceful Shutdown**: Implement graceful shutdown handling
+- [ ] **Dead Letter Queue**: Configure DLQ for failed Lambda invocations
+
+### Compliance & Best Practices
+
+- [ ] **Code Review Checklist**: Create code review checklist
+- [ ] **Security Audit**: Perform security audit of the application
+- [ ] **Compliance**: Ensure compliance with relevant standards (if applicable)
+- [ ] **Backup Strategy**: Document backup and disaster recovery procedures
+- [ ] **Resource Cleanup**: Add script to clean up AWS resources for testing
+
 ## License
 
 This project is provided as-is for demonstration purposes.
