@@ -1,0 +1,12 @@
+# S3 backend configuration for production
+# Use with: terraform init -backend-config=backend-s3.hcl
+# 
+# Copy this file to backend-s3.hcl and fill in your values:
+# cp backend-s3.hcl.example backend-s3.hcl
+
+bucket         = "mcp-terraform-todo-terraform-state"
+key            = "mcp-terraform/terraform.tfstate"
+region         = "eu-west-2"
+dynamodb_table = "mcp-terraform-todo-terraform-locks"
+encrypt        = true
+

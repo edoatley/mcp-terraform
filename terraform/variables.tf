@@ -28,3 +28,9 @@ variable "environment" {
   default     = "dev"
 }
 
+variable "aws_profile" {
+  description = "AWS profile to use for authentication (optional, can also use AWS_PROFILE env var)"
+  type        = string
+  default     = ""
+}
+

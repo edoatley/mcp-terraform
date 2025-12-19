@@ -1,0 +1,10 @@
+# Example configuration for local testing
+# Copy this file to application-api-test.properties or set environment variables
+
+# REST API Base URL - local Spring Boot instance
+api.base.url=http://localhost:8080
+
+# gRPC Configuration - local Spring Boot instance
+grpc.host=localhost
+grpc.port=9090
+

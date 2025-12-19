@@ -8,15 +8,14 @@ terraform {
     }
   }
   
-  backend "s3" {
-    # Backend configuration will be provided via backend.tf
-    # or via -backend-config flags
+  backend "local" {
+    # Local backend for testing - no prompts required
+    # For production, use S3 backend with -backend-config flags
+    path = "terraform.tfstate"
   }
 }
 
-provider "aws" {
-  region = var.aws_region
-}
+# Provider configuration moved to provider.tf
 
 # S3 bucket for Terraform state
 resource "aws_s3_bucket" "terraform_state" {

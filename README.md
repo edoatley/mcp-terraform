@@ -37,7 +37,6 @@ This project demonstrates how to use HashiCorp's Terraform MCP Server to validat
 - **MCP Validation**: Validates Terraform plans against HashiCorp's official registry
 - **Spring Boot 4**: Modern Java framework with Lambda support
 - **Dual API Support**: REST endpoints via API Gateway and gRPC endpoints via ALB
-- **DevContainer Setup**: Local development environment with Java 21 pre-configured
 - **Infrastructure as Code**: Complete AWS setup via Terraform (eu-west-2 region)
 - **CI/CD Integration**: Automated validation in GitHub Actions
 - **State Management**: S3 backend with DynamoDB locking
@@ -49,7 +48,15 @@ This project demonstrates how to use HashiCorp's Terraform MCP Server to validat
 - Terraform 1.13.4+
 - Docker (for MCP server and local testing)
 - AWS CLI configured with appropriate credentials
-- VS Code with Dev Containers extension (for devcontainer setup)
+
+## Local Tooling Requirements
+
+- Java 21+ runtime and development tools
+- Maven 3.9+ for building and running tests
+- Terraform 1.13.4+ for infrastructure workflows
+- Docker for running the MCP server locally
+- AWS CLI with configured credentials for Terraform tests
+- Python 3.11+ for `scripts/validate_terraform.py` and related tooling
 
 ## Project Structure
 
@@ -81,9 +88,6 @@ mcp-terraform/
 ├── .github/
 │   └── workflows/
 │       └── terraform-mcp.yml     # MCP validation workflow
-├── .devcontainer/
-│   ├── devcontainer.json         # Dev container configuration
-│   └── Dockerfile                # Dev container image (Java 21)
 ├── scripts/
 │   └── validate_terraform.py     # MCP validation script
 ├── Dockerfile                    # Lambda container image
@@ -92,34 +96,6 @@ mcp-terraform/
 └── README.md                     # This file
 ```
 
-## DevContainer Setup
-
-This project includes a VS Code devcontainer configuration for local development with Java 21.
-
-### Using DevContainer
-
-1. **Open in VS Code**: Open this project in VS Code
-2. **Reopen in Container**: When prompted, click "Reopen in Container", or use Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) and select "Dev Containers: Reopen in Container"
-3. **Wait for Setup**: The container will build and install all dependencies
-4. **Start Development**: Once ready, you can build and run the application
-
-### DevContainer Features
-
-- Java 21 runtime pre-installed
-- Maven 3.9 for building
-- VS Code extensions for Java, Spring Boot, and gRPC
-- Port forwarding for REST (8080) and gRPC (9090)
-- grpcurl installed for testing gRPC endpoints
-
-### Building in DevContainer
-
-```bash
-# Build the project
-mvn clean install
-
-# Run the application
-mvn spring-boot:run
-```
 
 ## Local Development
 
@@ -159,6 +135,104 @@ curl -X PUT http://localhost:8080/api/todos/{id} \
 # Delete a todo
 curl -X DELETE http://localhost:8080/api/todos/{id}
 ```
+
+### Running API Tests
+
+The project includes portable API tests that can run against local or deployed instances. These tests use REST Assured for REST endpoints and gRPC clients for gRPC endpoints.
+
+#### Configuration
+
+API tests are configured via `src/test/resources/application-api-test.properties` or environment variables:
+
+**For Local Testing:**
+```properties
+api.base.url=http://localhost:8080
+grpc.host=localhost
+grpc.port=9090
+```
+
+**For Deployed Testing:**
+```properties
+api.base.url=https://your-api-gateway-url.execute-api.eu-west-2.amazonaws.com/prod
+grpc.host=your-alb-endpoint.eu-west-2.elb.amazonaws.com
+grpc.port=9090
+```
+
+#### Running Tests
+
+**Quick Start (Recommended - Uses Test Script):**
+```bash
+# For local testing, start the application first (in another terminal):
+# Using Gradle:
+./gradlew bootRun
+
+# Using Maven:
+./mvnw spring-boot:run
+
+# Then run the API test script (in another terminal):
+# Using Gradle:
+./scripts/run_api_tests.sh
+
+# Using Maven:
+./scripts/run_api_tests_maven.sh
+```
+
+The test scripts automatically:
+- Check if the application is running
+- Build the project
+- Run API tests with proper configuration
+- Provide helpful error messages and troubleshooting tips
+
+**Against Local Instance (Manual):**
+1. Start the application: `./mvnw spring-boot:run` or `./gradlew bootRun`
+2. Run API tests:
+   - **Using script (Gradle)**: `./scripts/run_api_tests.sh`
+   - **Using script (Maven)**: `./scripts/run_api_tests_maven.sh`
+   - **Gradle**: `./gradlew apiTest`
+   - **Maven**: `./mvnw test -PapiTest` or `./mvnw test -Dtest=TodoRestApiTest,TodoGrpcApiTest`
+
+**Against Deployed Instance:**
+1. Set environment variables or update `src/apiTest/resources/application-api-test.properties` with deployed URLs
+2. Run API tests:
+   - **Using script (Gradle)**: `export API_BASE_URL=https://your-api.com && ./scripts/run_api_tests.sh`
+   - **Using script (Maven)**: `export API_BASE_URL=https://your-api.com && ./scripts/run_api_tests_maven.sh`
+   - **Gradle**: `./gradlew apiTest`
+   - **Maven**: `./mvnw test -PapiTest` or `./mvnw test -Dtest=TodoRestApiTest,TodoGrpcApiTest`
+
+**Using Environment Variables:**
+```bash
+export API_BASE_URL=https://your-api-gateway-url.execute-api.eu-west-2.amazonaws.com/prod
+export GRPC_HOST=your-alb-endpoint.eu-west-2.elb.amazonaws.com
+export GRPC_PORT=9090
+
+# Gradle
+./gradlew apiTest
+
+# Maven
+mvn test -PapiTest
+```
+
+**Using System Properties:**
+```bash
+# Gradle
+./gradlew apiTest -Dapi.base.url=https://your-api-gateway-url.execute-api.eu-west-2.amazonaws.com/prod \
+  -Dgrpc.host=your-alb-endpoint.eu-west-2.elb.amazonaws.com \
+  -Dgrpc.port=9090
+
+# Maven
+mvn test -PapiTest \
+  -Dapi.base.url=https://your-api-gateway-url.execute-api.eu-west-2.amazonaws.com/prod \
+  -Dgrpc.host=your-alb-endpoint.eu-west-2.elb.amazonaws.com \
+  -Dgrpc.port=9090
+```
+
+**Note:** API tests are in a separate source set (`src/apiTest`) and have their own Gradle task (`apiTest`). They are excluded from the regular `test` task to allow running them independently against a running application instance.
+
+The API tests cover:
+- REST API: Full CRUD operations, error handling, workflow tests
+- gRPC API: Full CRUD operations, error handling, workflow tests
+
+**Note:** These tests assume the application is already running. They do not start the Spring Boot application context (unlike integration tests).
 
 ### Testing gRPC API
 
@@ -203,13 +277,137 @@ grpcurl -plaintext -d '{"id": "{todo-id}"}' \
    terraform apply
    ```
 
+### Running Terraform Tests
+
+The project includes comprehensive Terraform test files that validate infrastructure configuration.
+
+**Prerequisites:**
+- Terraform 1.6.0 or later (required for `terraform test` command)
+- **AWS credentials configured** (required because tests use AWS data sources)
+- AWS SSO profile configured (if using SSO)
+
+**Important:** Tests require AWS credentials because the configuration uses data sources (`data.aws_vpc.default` and `data.aws_subnets.default`) that query AWS. Tests only run `terraform plan` (they don't create resources), but they still need to read AWS information.
+
+**Quick Start (Recommended - Uses Test Script):**
+```bash
+# Set your AWS profile (defaults to 'sandbox' if not set)
+export AWS_PROFILE=sandbox  # optional, defaults to 'sandbox'
+
+# Run the test script (handles SSO login, cleans state, runs tests)
+./scripts/run_terraform_tests.sh
+```
+
+The test script automatically:
+- Sets `AWS_SDK_LOAD_CONFIG=1` for SSO support
+- Logs into AWS SSO (if needed)
+- Cleans local state files (`.terraform/`, `terraform.tfstate*`, `.terraform.lock.hcl`)
+- Initializes Terraform with local backend
+- Runs all tests
+
+**Manual Testing (Alternative):**
+```bash
+export AWS_SDK_LOAD_CONFIG=1      # required for AWS SSO profiles
+export AWS_PROFILE=sandbox  # or your AWS profile name
+cd terraform
+terraform init
+terraform test
+```
+
+**Using Default Credentials:**
+```bash
+cd terraform
+terraform init
+terraform test
+```
+
+**Using Environment Variables:**
+```bash
+export AWS_SDK_LOAD_CONFIG=1  # optional; safe to set for all methods
+export AWS_ACCESS_KEY_ID=your-access-key
+export AWS_SECRET_ACCESS_KEY=your-secret-key
+export AWS_REGION=eu-west-2
+cd terraform
+terraform init
+terraform test
+```
+
+See `terraform/TESTING.md` for detailed setup instructions and troubleshooting.
+
+**Run Specific Test File:**
+```bash
+terraform test tests/main.tftest.hcl
+terraform test tests/lambda.tftest.hcl
+terraform test tests/api_gateway.tftest.hcl
+terraform test tests/alb.tftest.hcl
+terraform test tests/outputs.tftest.hcl
+terraform test tests/variables.tftest.hcl
+```
+
+**Run with Verbose Output:**
+```bash
+terraform test -verbose
+```
+
+**Test Coverage:**
+- S3 bucket configuration (versioning, encryption)
+- DynamoDB table configuration
+- Lambda function and ECR repository
+- API Gateway resources and integrations
+- Application Load Balancer and security groups
+- Output values
+- Variable defaults and validation
+
+See `terraform/tests/README.md` for detailed test documentation.
+
+**Troubleshooting common auth errors:**
+- `InvalidClientTokenId`: SSO session expired or not loaded by Terraform. Run `aws sso login --profile <profile>`, ensure `AWS_SDK_LOAD_CONFIG=1`, and re-run tests.
+- `failed to get shared config profile`: Profile name is wrong or missing. Create it with `aws configure --profile <profile>` or unset `AWS_PROFILE` to use defaults.
+
 ### Backend Configuration
 
-The Terraform backend uses S3 for state storage and DynamoDB for locking. Before first use:
+The Terraform configuration supports two backend modes:
 
-1. The S3 bucket and DynamoDB table are created by `main.tf`
-2. After first apply, update `terraform/backend.tf` with the actual bucket and table names
-3. Re-run `terraform init -migrate-state` to migrate local state to S3
+**Local Backend (Default - For Testing):**
+- Used automatically by the test script
+- State stored in `terraform/terraform.tfstate`
+- No additional configuration needed
+- Perfect for running tests without affecting production state
+
+**S3 Backend (For Production Deployments):**
+- State stored in S3 with DynamoDB locking
+- Requires switching backend configuration
+
+**Switching to S3 Backend for Production:**
+
+1. **Create backend configuration file:**
+   ```bash
+   cd terraform
+   cp backend-s3.hcl.example backend-s3.hcl
+   # Edit backend-s3.hcl with your S3 bucket and DynamoDB table names
+   ```
+
+2. **Run the production init script:**
+   ```bash
+   ./scripts/init_terraform_production.sh
+   ```
+   
+   This script:
+   - Switches `main.tf` backend from `local` to `s3`
+   - Initializes Terraform with S3 backend configuration
+   - Migrates existing state (if any) to S3
+
+3. **After production work, switch back to local for testing:**
+   ```bash
+   ./scripts/init_terraform_local.sh
+   ```
+
+**Manual Backend Switching:**
+
+If you prefer to switch manually, edit `terraform/main.tf`:
+- **For tests:** Use `backend "local"` block
+- **For production:** Use `backend "s3"` block and run `terraform init -backend-config=backend-s3.hcl -migrate-state`
+
+**Note:** The S3 bucket and DynamoDB table are created by `main.tf` resources. After first `terraform apply`, update `backend-s3.hcl` with the actual resource names.
 
 ### Variables
 
@@ -230,6 +428,51 @@ After deployment, Terraform will output:
 - `alb_dns_name`: Application Load Balancer DNS for gRPC
 - `terraform_state_bucket`: S3 bucket for Terraform state
 - `terraform_lock_table`: DynamoDB table for state locking
+
+## Test Coverage
+
+The project uses JaCoCo for test coverage reporting with a target of 80%+ coverage.
+
+### Generating Coverage Reports
+
+#### Using Maven
+
+```bash
+# Run tests and generate coverage report
+./mvnw clean test jacoco:report
+
+# View HTML report
+open target/site/jacoco/index.html
+
+# Check coverage thresholds (fails if below 80%)
+./mvnw clean test jacoco:check
+```
+
+#### Using Gradle
+
+```bash
+# Run tests and generate coverage report
+./gradlew clean test jacocoTestReport
+
+# View HTML report
+open build/reports/jacoco/test/html/index.html
+
+# Check coverage thresholds (fails if below 80%)
+./gradlew jacocoTestCoverageVerification
+```
+
+### Coverage Exclusions
+
+The following classes are excluded from coverage calculations:
+- `TodoApplication` - Spring Boot main class
+- `LambdaHandler` - AWS Lambda entry point
+- `com.example.todo.model.*` - Data model classes (Lombok generated)
+- `com.example.todo.proto.*` - Generated Protocol Buffer classes
+
+### Coverage Reports Location
+
+- **Maven**: `target/site/jacoco/index.html`
+- **Gradle**: `build/reports/jacoco/test/html/index.html`
 
 ## GitHub Actions MCP Validation
 
@@ -305,12 +548,6 @@ See `src/main/proto/todo.proto` for complete protocol buffer definitions.
 
 ## Troubleshooting
 
-### DevContainer Issues
-
-- **Container won't start**: Ensure Docker is running and VS Code Dev Containers extension is installed
-- **Port forwarding not working**: Check VS Code port forwarding settings
-- **Maven build fails**: Try `mvn clean install -U` to update dependencies
-
 ### Terraform Issues
 
 - **Backend initialization fails**: Ensure S3 bucket and DynamoDB table exist (created by `main.tf`)
@@ -345,13 +582,12 @@ This section contains a comprehensive list of tasks and improvements to be compl
 
 ### Testing & Quality Assurance
 
-- [ ] **Unit Tests**: Add JUnit tests for `TodoService`, `TodoController`, and `TodoGrpcController`
-- [ ] **Integration Tests**: Create integration tests for REST and gRPC endpoints
-- [ ] **Test Coverage**: Set up JaCoCo or similar tool to track test coverage (target: 80%+)
-- [ ] **Contract Testing**: Add contract tests for gRPC service definitions
-- [ ] **Load Testing**: Create load tests for Lambda function performance
-- [ ] **API Testing**: Add Postman/Newman collections or REST Assured tests
-- [ ] **Terraform Testing**: Add `terraform test` files for infrastructure validation
+- [x] **Unit Tests**: Add JUnit tests for `TodoService`, `TodoController`, and `TodoGrpcController`
+- [x] **Integration Tests**: Create integration tests for REST and gRPC endpoints
+- [x] **Test Coverage**: Set up JaCoCo or similar tool to track test coverage (target: 80%+)
+- [x] **Contract Testing**: Add contract tests for gRPC service definitions
+- [x] **API Testing**: Add portable REST Assured tests for local and deployed environments
+- [x] **Terraform Testing**: Add `terraform test` files for infrastructure validation
 
 ### Data Persistence
 

@@ -1,5 +1,6 @@
 # Maven
 target/
+!target/*.jar
 pom.xml.tag
 pom.xml.releaseBackup
 pom.xml.versionsBackup
@@ -54,4 +55,20 @@ Thumbs.db
 # MCP validation outputs
 mcp_validation_report.txt
 ai_analysis.txt
+
+# Gradle
+.gradle/
+build/
+gradlew
+gradlew.bat
+gradle.properties
+gradle.kts
+gradle.settings
+gradle.settings.kts
+
+# JaCoCo Coverage Reports
+**/jacoco.exec
+**/jacoco/
+**/site/jacoco/
+**/build/reports/jacoco/
 

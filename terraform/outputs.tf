@@ -1,6 +1,6 @@
 output "api_gateway_url" {
   description = "API Gateway endpoint URL"
-  value       = aws_api_gateway_deployment.todo_api.invoke_url
+  value       = "https://${aws_api_gateway_rest_api.todo_api.id}.execute-api.${var.aws_region}.amazonaws.com/${aws_api_gateway_stage.todo_api.stage_name}"
 }
 
 output "lambda_function_arn" {
