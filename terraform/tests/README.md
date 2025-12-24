@@ -165,16 +165,16 @@ run "test_name" {
 - S3 bucket creation with correct naming
 - S3 bucket versioning enabled
 - S3 bucket encryption (AES256)
-- DynamoDB table creation with correct configuration
-- DynamoDB billing mode (PAY_PER_REQUEST)
-- DynamoDB hash key (LockID)
+- DynamoDB table for Terraform state locking (LockID hash key, PAY_PER_REQUEST)
+- DynamoDB table for Todos (id hash key, PAY_PER_REQUEST, PITR enabled, encryption enabled)
 
 ### Lambda Function
 - ECR repository creation
 - Image scanning enabled
 - Lambda function configuration (memory, timeout)
-- IAM role and policies
-- Environment variables
+- IAM role and policies (basic execution, DynamoDB access)
+- Environment variables (ENVIRONMENT, DYNAMODB_TABLE_NAME, SPRING_PROFILES_ACTIVE)
+- DynamoDB IAM permissions (GetItem, PutItem, UpdateItem, DeleteItem, Scan)
 
 ### API Gateway
 - API Gateway creation
@@ -193,6 +193,7 @@ run "test_name" {
 ### Outputs
 - All required outputs are defined
 - Output values match expected resource names
+- DynamoDB todos table name output
 
 ### Variables
 - Default values are correct

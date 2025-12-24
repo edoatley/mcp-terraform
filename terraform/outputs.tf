@@ -28,3 +28,8 @@ output "terraform_lock_table" {
   value       = aws_dynamodb_table.terraform_locks.name
 }
 
+output "dynamodb_todos_table_name" {
+  description = "DynamoDB table name for Todos"
+  value       = aws_dynamodb_table.todos.name
+}
+

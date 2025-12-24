@@ -1,11 +1,11 @@
 # Terraform tests for Lambda function and related resources
 
 variables {
-  project_name      = "mcp-terraform-todo-test"
-  aws_region        = "eu-west-2"
-  environment       = "test"
+  project_name       = "mcp-terraform-todo-test"
+  aws_region         = "eu-west-2"
+  environment        = "test"
   lambda_memory_size = 512
-  lambda_timeout    = 30
+  lambda_timeout     = 30
 }
 
 run "ecr_repository_created" {
@@ -97,6 +97,42 @@ run "lambda_environment_variables" {
     error_message = "Lambda should have ENVIRONMENT variable set"
   }
 }
+
+run "lambda_dynamodb_table_name_env_var" {
+  command = plan
+
+  assert {
+    condition     = aws_lambda_function.todo_api.environment[0].variables.DYNAMODB_TABLE_NAME == aws_dynamodb_table.todos.name
+    error_message = "Lambda should have DYNAMODB_TABLE_NAME environment variable set to the todos table name"
+  }
+}
+
+run "lambda_spring_profiles_active_env_var" {
+  command = plan
+
+  assert {
+    condition     = aws_lambda_function.todo_api.environment[0].variables.SPRING_PROFILES_ACTIVE == "dynamodb"
+    error_message = "Lambda should have SPRING_PROFILES_ACTIVE environment variable set to 'dynamodb'"
+  }
+}
+
+run "lambda_dynamodb_iam_policy_exists" {
+  command = plan
+
+  assert {
+    condition     = aws_iam_role_policy.lambda_dynamodb.name == "${var.project_name}-lambda-dynamodb-policy"
+    error_message = "Lambda should have DynamoDB IAM policy attached with correct name"
+  }
+}
+
+# Note: Policy content (permissions, resources, and role attachment) cannot be fully validated
+# during plan phase because these attributes are computed. The policy structure and relationships
+# are validated by Terraform's schema validation. The policy definition in terraform/lambda.tf
+# ensures:
+# - Policy is attached to aws_iam_role.lambda_role
+# - Policy includes required DynamoDB permissions (GetItem, PutItem, UpdateItem, DeleteItem, Scan)
+# - Policy resource references aws_dynamodb_table.todos.arn
+# To fully test policy content, use `command = apply` or validate in integration tests.
 
 
 

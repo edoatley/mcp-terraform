@@ -49,6 +49,32 @@ public class TodoGrpcController extends TodoServiceGrpc.TodoServiceImplBase {
     
     @Override
     public void createTodo(CreateTodoRequest request, StreamObserver<CreateTodoResponse> responseObserver) {
+        // Validate request
+        if (request.getTitle() == null || request.getTitle().trim().isEmpty()) {
+            responseObserver.onError(
+                    io.grpc.Status.INVALID_ARGUMENT
+                            .withDescription("Title is required and cannot be empty")
+                            .asRuntimeException()
+            );
+            return;
+        }
+        if (request.getTitle().length() > 200) {
+            responseObserver.onError(
+                    io.grpc.Status.INVALID_ARGUMENT
+                            .withDescription("Title must not exceed 200 characters")
+                            .asRuntimeException()
+            );
+            return;
+        }
+        if (request.getDescription() != null && request.getDescription().length() > 500) {
+            responseObserver.onError(
+                    io.grpc.Status.INVALID_ARGUMENT
+                            .withDescription("Description must not exceed 500 characters")
+                            .asRuntimeException()
+            );
+            return;
+        }
+        
         Todo todo = new Todo(request.getTitle(), request.getDescription());
         Todo created = todoService.createTodo(todo);
         
@@ -61,6 +87,32 @@ public class TodoGrpcController extends TodoServiceGrpc.TodoServiceImplBase {
     
     @Override
     public void updateTodo(UpdateTodoRequest request, StreamObserver<UpdateTodoResponse> responseObserver) {
+        // Validate request
+        if (request.getTitle() == null || request.getTitle().trim().isEmpty()) {
+            responseObserver.onError(
+                    io.grpc.Status.INVALID_ARGUMENT
+                            .withDescription("Title is required and cannot be empty")
+                            .asRuntimeException()
+            );
+            return;
+        }
+        if (request.getTitle().length() > 200) {
+            responseObserver.onError(
+                    io.grpc.Status.INVALID_ARGUMENT
+                            .withDescription("Title must not exceed 200 characters")
+                            .asRuntimeException()
+            );
+            return;
+        }
+        if (request.getDescription() != null && request.getDescription().length() > 500) {
+            responseObserver.onError(
+                    io.grpc.Status.INVALID_ARGUMENT
+                            .withDescription("Description must not exceed 500 characters")
+                            .asRuntimeException()
+            );
+            return;
+        }
+        
         Todo todo = new Todo(request.getId(), request.getTitle(), request.getDescription(), request.getCompleted());
         todoService.updateTodo(request.getId(), todo)
                 .ifPresentOrElse(

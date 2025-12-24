@@ -1,5 +1,5 @@
 # Terraform tests for main infrastructure resources
-# Tests S3 bucket, DynamoDB table, and basic configuration
+# Tests S3 bucket, DynamoDB tables (state locking and todos), and basic configuration
 
 variables {
   project_name = "mcp-terraform-todo-test"
@@ -58,6 +58,51 @@ run "dynamodb_table_hash_key" {
   assert {
     condition     = aws_dynamodb_table.terraform_locks.hash_key == "LockID"
     error_message = "DynamoDB table should have LockID as hash key"
+  }
+}
+
+run "todos_table_created" {
+  command = plan
+
+  assert {
+    condition     = aws_dynamodb_table.todos.name == "${var.project_name}-todos"
+    error_message = "Todos DynamoDB table name should match project name pattern"
+  }
+}
+
+run "todos_table_billing_mode" {
+  command = plan
+
+  assert {
+    condition     = aws_dynamodb_table.todos.billing_mode == "PAY_PER_REQUEST"
+    error_message = "Todos DynamoDB table should use PAY_PER_REQUEST billing mode"
+  }
+}
+
+run "todos_table_hash_key" {
+  command = plan
+
+  assert {
+    condition     = aws_dynamodb_table.todos.hash_key == "id"
+    error_message = "Todos DynamoDB table should have id as hash key"
+  }
+}
+
+run "todos_table_pitr_enabled" {
+  command = plan
+
+  assert {
+    condition     = aws_dynamodb_table.todos.point_in_time_recovery[0].enabled == true
+    error_message = "Todos DynamoDB table should have point-in-time recovery enabled"
+  }
+}
+
+run "todos_table_encryption_enabled" {
+  command = plan
+
+  assert {
+    condition     = aws_dynamodb_table.todos.server_side_encryption[0].enabled == true
+    error_message = "Todos DynamoDB table should have server-side encryption enabled"
   }
 }
 
