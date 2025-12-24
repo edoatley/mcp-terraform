@@ -1,42 +1,52 @@
 package com.example.todo.service;
 
 import com.example.todo.model.Todo;
+import com.example.todo.repository.TodoRepository;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.List;
+import java.util.Optional;
 
 @Service
 public class TodoService {
-    private final Map<String, Todo> todos = new ConcurrentHashMap<>();
+    private final TodoRepository todoRepository;
+    
+    public TodoService(TodoRepository todoRepository) {
+        this.todoRepository = todoRepository;
+    }
     
     public List<Todo> getAllTodos() {
-        return new ArrayList<>(todos.values());
+        return todoRepository.findAll();
     }
     
     public Optional<Todo> getTodoById(String id) {
-        return Optional.ofNullable(todos.get(id));
+        return todoRepository.findById(id);
     }
     
     public Todo createTodo(Todo todo) {
         if (todo.getId() == null) {
             todo = new Todo(todo.getTitle(), todo.getDescription());
         }
-        todos.put(todo.getId(), todo);
-        return todo;
+        return todoRepository.save(todo);
     }
     
     public Optional<Todo> updateTodo(String id, Todo todo) {
-        if (todos.containsKey(id)) {
+        Optional<Todo> existing = todoRepository.findById(id);
+        if (existing.isPresent()) {
             todo.setId(id);
-            todos.put(id, todo);
-            return Optional.of(todo);
+            Todo updated = todoRepository.save(todo);
+            return Optional.of(updated);
         }
         return Optional.empty();
     }
     
     public boolean deleteTodo(String id) {
-        return todos.remove(id) != null;
+        Optional<Todo> existing = todoRepository.findById(id);
+        if (existing.isPresent()) {
+            todoRepository.deleteById(id);
+            return true;
+        }
+        return false;
     }
 }
 

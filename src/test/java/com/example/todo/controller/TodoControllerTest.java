@@ -209,5 +209,91 @@ class TodoControllerTest {
 
         verify(todoService, times(1)).getAllTodos();
     }
+
+    @Test
+    @DisplayName("POST /api/todos should return 400 when title is null")
+    void createTodo_WithNullTitle_ReturnsBadRequest() throws Exception {
+        // Given
+        Todo invalidTodo = new Todo();
+        invalidTodo.setTitle(null);
+        invalidTodo.setDescription("Description");
+
+        // When & Then
+        mockMvc.perform(post("/api/todos")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidTodo)))
+                .andExpect(status().isBadRequest());
+
+        verify(todoService, never()).createTodo(any());
+    }
+
+    @Test
+    @DisplayName("POST /api/todos should return 400 when title is blank")
+    void createTodo_WithBlankTitle_ReturnsBadRequest() throws Exception {
+        // Given
+        Todo invalidTodo = new Todo();
+        invalidTodo.setTitle("   ");
+        invalidTodo.setDescription("Description");
+
+        // When & Then
+        mockMvc.perform(post("/api/todos")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidTodo)))
+                .andExpect(status().isBadRequest());
+
+        verify(todoService, never()).createTodo(any());
+    }
+
+    @Test
+    @DisplayName("POST /api/todos should return 400 when title exceeds 200 characters")
+    void createTodo_WithTitleTooLong_ReturnsBadRequest() throws Exception {
+        // Given
+        Todo invalidTodo = new Todo();
+        invalidTodo.setTitle("a".repeat(201));
+        invalidTodo.setDescription("Description");
+
+        // When & Then
+        mockMvc.perform(post("/api/todos")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidTodo)))
+                .andExpect(status().isBadRequest());
+
+        verify(todoService, never()).createTodo(any());
+    }
+
+    @Test
+    @DisplayName("POST /api/todos should return 400 when description exceeds 500 characters")
+    void createTodo_WithDescriptionTooLong_ReturnsBadRequest() throws Exception {
+        // Given
+        Todo invalidTodo = new Todo();
+        invalidTodo.setTitle("Valid Title");
+        invalidTodo.setDescription("a".repeat(501));
+
+        // When & Then
+        mockMvc.perform(post("/api/todos")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidTodo)))
+                .andExpect(status().isBadRequest());
+
+        verify(todoService, never()).createTodo(any());
+    }
+
+    @Test
+    @DisplayName("PUT /api/todos/{id} should return 400 when title is blank")
+    void updateTodo_WithBlankTitle_ReturnsBadRequest() throws Exception {
+        // Given
+        Todo invalidTodo = new Todo();
+        invalidTodo.setId("test-id");
+        invalidTodo.setTitle("");
+        invalidTodo.setDescription("Description");
+
+        // When & Then
+        mockMvc.perform(put("/api/todos/test-id")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidTodo)))
+                .andExpect(status().isBadRequest());
+
+        verify(todoService, never()).updateTodo(anyString(), any());
+    }
 }
 

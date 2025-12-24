@@ -49,5 +49,14 @@ run "terraform_lock_table_output" {
   }
 }
 
+run "dynamodb_todos_table_name_output" {
+  command = plan
+
+  assert {
+    condition     = output.dynamodb_todos_table_name == "${var.project_name}-todos"
+    error_message = "dynamodb_todos_table_name output should match todos table name"
+  }
+}
+
 
 

@@ -141,11 +141,14 @@ terraform test tests/variables.tftest.hcl
 
 The tests validate:
 - ✅ S3 bucket configuration (versioning, encryption)
-- ✅ DynamoDB table configuration
+- ✅ DynamoDB tables configuration (state locking and todos)
+- ✅ Todos DynamoDB table (PITR, encryption, billing mode)
 - ✅ Lambda function and ECR repository
+- ✅ Lambda IAM permissions (basic execution and DynamoDB access)
+- ✅ Lambda environment variables (including DynamoDB table name and Spring profile)
 - ✅ API Gateway resources and integrations
 - ✅ Application Load Balancer and security groups
-- ✅ Output values
+- ✅ Output values (including DynamoDB todos table name)
 - ✅ Variable defaults and validation
 
 See `tests/README.md` for detailed documentation.

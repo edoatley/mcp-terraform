@@ -36,6 +36,29 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+# IAM policy for DynamoDB access
+resource "aws_iam_role_policy" "lambda_dynamodb" {
+  name = "${var.project_name}-lambda-dynamodb-policy"
+  role = aws_iam_role.lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Scan"
+        ]
+        Resource = aws_dynamodb_table.todos.arn
+      }
+    ]
+  })
+}
+
 # Lambda function using container image
 resource "aws_lambda_function" "todo_api" {
   function_name = "${var.project_name}-api"
@@ -49,7 +72,9 @@ resource "aws_lambda_function" "todo_api" {
   
   environment {
     variables = {
-      ENVIRONMENT = var.environment
+      ENVIRONMENT         = var.environment
+      DYNAMODB_TABLE_NAME = aws_dynamodb_table.todos.name
+      SPRING_PROFILES_ACTIVE = "dynamodb"
     }
   }
   

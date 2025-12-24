@@ -19,16 +19,16 @@ This project demonstrates how to use HashiCorp's Terraform MCP Server to validat
          
 ┌─────────────────────────────────────┐
 │         AWS Infrastructure          │
-│         (eu-west-2 London)         │
+│         (eu-west-2 London)          │
 │                                     │
-│  API Gateway ──► Lambda Function   │
-│      │                  │          │
-│      │                  └─► Spring │
+│  API Gateway ──► Lambda Function    │
+│      │                  │           │
+│      │                  └─► Spring  │
 │      │                      Boot 4  │
 │      │                      TODO API│
 │      │                      (REST + │
 │      │                       gRPC)  │
-│      └─► ALB (for gRPC)            │
+│      └─► ALB (for gRPC)             │
 └─────────────────────────────────────┘
 ```
 
@@ -105,13 +105,44 @@ mcp-terraform/
 # Build the project
 mvn clean install
 
-# Run the application locally
-mvn spring-boot:run
+# Or using Gradle:
+./gradlew build
+```
+
+### Running the Application Locally
+
+The application supports two storage backends via Spring profiles:
+
+**In-Memory Storage (Default for Local Development):**
+```bash
+# Using Maven:
+./mvnw spring-boot:run
+
+# Using Gradle:
+./gradlew bootRun
+
+# Or explicitly set the profile:
+./mvnw spring-boot:run -Dspring.profiles.active=in-memory
+```
+
+**DynamoDB Storage:**
+```bash
+# Requires DYNAMODB_TABLE_NAME environment variable
+export DYNAMODB_TABLE_NAME=mcp-terraform-todo-todos
+./mvnw spring-boot:run -Dspring.profiles.active=dynamodb
+
+# Or with DynamoDB Local:
+export DYNAMODB_TABLE_NAME=mcp-terraform-todo-todos
+export SPRING_PROFILES_ACTIVE=dynamodb
+# Set dynamodb.endpoint=http://localhost:8000 in application.properties
+./mvnw spring-boot:run
 ```
 
 The application will start on:
 - REST API: http://localhost:8080
 - gRPC: localhost:9090
+
+**Note:** By default, the application uses `in-memory` profile for local development, which requires no AWS setup. For production/Lambda deployments, use the `dynamodb` profile.
 
 ### Testing REST API
 
@@ -162,14 +193,7 @@ grpc.port=9090
 
 **Quick Start (Recommended - Uses Test Script):**
 ```bash
-# For local testing, start the application first (in another terminal):
-# Using Gradle:
-./gradlew bootRun
-
-# Using Maven:
-./mvnw spring-boot:run
-
-# Then run the API test script (in another terminal):
+# The test scripts automatically start the application, run tests, and clean up:
 # Using Gradle:
 ./scripts/run_api_tests.sh
 
@@ -178,16 +202,31 @@ grpc.port=9090
 ```
 
 The test scripts automatically:
-- Check if the application is running
 - Build the project
+- Start the application in the background (for local testing)
+- Wait for the application to be ready
 - Run API tests with proper configuration
+- Stop the application when tests complete
 - Provide helpful error messages and troubleshooting tips
 
+**Note:** For local testing, the scripts automatically start the application with the `in-memory` profile (no DynamoDB required). For testing against deployed instances, set `API_BASE_URL` to point to your deployed API.
+
 **Against Local Instance (Manual):**
-1. Start the application: `./mvnw spring-boot:run` or `./gradlew bootRun`
-2. Run API tests:
-   - **Using script (Gradle)**: `./scripts/run_api_tests.sh`
-   - **Using script (Maven)**: `./scripts/run_api_tests_maven.sh`
+The test scripts automatically start the application, but if you prefer to start it manually:
+
+1. Start the application with in-memory profile (no DynamoDB required):
+   ```bash
+   # Using Maven:
+   ./mvnw spring-boot:run
+   
+   # Using Gradle:
+   ./gradlew bootRun
+   ```
+   The application defaults to `in-memory` profile for local development.
+
+2. Run API tests (in another terminal):
+   - **Using script (Gradle)**: `./scripts/run_api_tests.sh` (will detect running app)
+   - **Using script (Maven)**: `./scripts/run_api_tests_maven.sh` (will detect running app)
    - **Gradle**: `./gradlew apiTest`
    - **Maven**: `./mvnw test -PapiTest` or `./mvnw test -Dtest=TodoRestApiTest,TodoGrpcApiTest`
 
@@ -232,7 +271,7 @@ The API tests cover:
 - REST API: Full CRUD operations, error handling, workflow tests
 - gRPC API: Full CRUD operations, error handling, workflow tests
 
-**Note:** These tests assume the application is already running. They do not start the Spring Boot application context (unlike integration tests).
+**Note:** These tests are portable and can run against a running application instance. When using the test scripts (`run_api_tests.sh` or `run_api_tests_maven.sh`), the application is automatically started in the background. They do not start the Spring Boot application context (unlike integration tests).
 
 ### Testing gRPC API
 
@@ -428,6 +467,7 @@ After deployment, Terraform will output:
 - `alb_dns_name`: Application Load Balancer DNS for gRPC
 - `terraform_state_bucket`: S3 bucket for Terraform state
 - `terraform_lock_table`: DynamoDB table for state locking
+- `dynamodb_todos_table_name`: DynamoDB table name for Todos (automatically set as Lambda environment variable)
 
 ## Test Coverage
 
@@ -591,14 +631,145 @@ This section contains a comprehensive list of tasks and improvements to be compl
 
 ### Data Persistence
 
-- [ ] **DynamoDB Integration**: Replace in-memory storage with DynamoDB for persistence
-  - [ ] Create DynamoDB table via Terraform
-  - [ ] Add DynamoDB SDK dependency
-  - [ ] Implement DynamoDB repository layer
-  - [ ] Add data migration scripts if needed
-- [ ] **Database Schema**: Design and document data model
-- [ ] **Connection Pooling**: Configure proper connection pooling for database
-- [ ] **Data Validation**: Add input validation and sanitization
+- [x] **DynamoDB Integration**: Replace in-memory storage with DynamoDB for persistence
+  - [x] Create DynamoDB table via Terraform
+  - [x] Add DynamoDB SDK dependency
+  - [x] Implement DynamoDB repository layer
+  - [x] Add data migration scripts if needed (not required - no existing data)
+- [x] **Database Schema**: Design and document data model
+- [x] **Connection Pooling**: Configure proper connection pooling for database
+- [x] **Data Validation**: Add input validation and sanitization
+
+#### DynamoDB Table Schema
+
+The Todos table uses a simple design optimized for the current access patterns:
+
+**Table Name**: `${project_name}-todos` (e.g., `mcp-terraform-todo-todos`)
+
+**Partition Key**: `id` (String) - UUID generated for each todo
+
+**Attributes**:
+- `id` (String, required) - Unique identifier, partition key
+- `title` (String, required) - Todo title, max 200 characters
+- `description` (String, optional) - Todo description, max 500 characters
+- `completed` (Boolean) - Completion status, defaults to false
+
+**Table Configuration**:
+- **Billing Mode**: `PAY_PER_REQUEST` (on-demand) - Cost-effective for variable workloads
+- **Point-in-Time Recovery**: Enabled for data protection
+- **Encryption**: Server-side encryption with AWS managed keys
+- **Region**: `eu-west-2` (London)
+
+**Access Patterns**:
+- Get todo by ID: Direct lookup using partition key (`id`)
+- List all todos: Full table scan (efficient for small datasets)
+- Create/Update/Delete: Direct operations using partition key
+
+**Future Enhancements** (if needed):
+- Global Secondary Index (GSI) for querying by `completed` status
+- GSI for date-based queries if adding timestamps
+- Pagination support for large datasets
+
+#### Connection Pooling
+
+DynamoDB uses HTTP connections managed by the AWS SDK v2. The SDK automatically handles:
+- Connection reuse and pooling
+- Request retries with exponential backoff
+- Connection lifecycle management
+
+No traditional database connection pooling is needed. The SDK efficiently manages HTTP connections to DynamoDB's REST API.
+
+#### Spring Profiles
+
+The application supports two storage backends via Spring profiles:
+
+**In-Memory Profile (`in-memory`):**
+- Uses `ConcurrentHashMap` for storage
+- No AWS setup required
+- Perfect for local development and testing
+- Default profile for local development
+- Activated with: `spring.profiles.active=in-memory`
+
+**DynamoDB Profile (`dynamodb`):**
+- Uses AWS DynamoDB for persistence
+- Requires `DYNAMODB_TABLE_NAME` environment variable
+- Used in production/Lambda deployments
+- Default when no profile is specified (for Lambda)
+- Activated with: `spring.profiles.active=dynamodb`
+
+**Profile Selection:**
+- Local development: Defaults to `in-memory` (no configuration needed)
+- Lambda/Production: Set `SPRING_PROFILES_ACTIVE=dynamodb` environment variable
+- Tests: Use `test,in-memory` profile (configured in `application-test.properties`)
+
+**Switching Profiles:**
+```bash
+# Use in-memory (local development)
+./mvnw spring-boot:run
+
+# Use DynamoDB (requires AWS setup)
+export DYNAMODB_TABLE_NAME=mcp-terraform-todo-todos
+./mvnw spring-boot:run -Dspring.profiles.active=dynamodb
+```
+
+#### Data Validation
+
+Input validation is implemented using Bean Validation (JSR-303/Jakarta Validation):
+
+**REST API**:
+- Validation annotations on `Todo` model (`@NotBlank`, `@Size`)
+- Automatic validation via `@Valid` annotation on request bodies
+- Validation errors return HTTP 400 with detailed error messages
+
+**gRPC API**:
+- Manual validation in `TodoGrpcController` for request fields
+- Returns `INVALID_ARGUMENT` status for validation failures
+
+**Validation Rules**:
+- `title`: Required, not blank, max 200 characters
+- `description`: Optional, max 500 characters
+- `id`: Required for updates (validated by service layer)
+
+#### Environment Variables
+
+The following environment variables are required for DynamoDB:
+
+- `DYNAMODB_TABLE_NAME`: DynamoDB table name (set automatically by Terraform)
+- `AWS_REGION`: AWS region (defaults to `eu-west-2`)
+
+For local development with DynamoDB Local:
+- `dynamodb.endpoint`: Optional endpoint URL (e.g., `http://localhost:8000`)
+
+#### Local Development with DynamoDB Local
+
+To run the application locally with DynamoDB Local:
+
+1. **Start DynamoDB Local** (using Docker):
+   ```bash
+   docker run -p 8000:8000 amazon/dynamodb-local
+   ```
+
+2. **Create the table** (using AWS CLI):
+   ```bash
+   aws dynamodb create-table \
+     --table-name mcp-terraform-todo-todos \
+     --attribute-definitions AttributeName=id,AttributeType=S \
+     --key-schema AttributeName=id,KeyType=HASH \
+     --billing-mode PAY_PER_REQUEST \
+     --endpoint-url http://localhost:8000
+   ```
+
+3. **Configure application** (`src/main/resources/application.properties`):
+   ```properties
+   dynamodb.endpoint=http://localhost:8000
+   DYNAMODB_TABLE_NAME=mcp-terraform-todo-todos
+   aws.region=us-east-1
+   ```
+
+4. **Run the application**:
+   ```bash
+   ./mvnw spring-boot:run
+   ```
 
 ### CI/CD & Deployment
 
