@@ -73,7 +73,7 @@ jobs:
 
       - name: Terraform Format Check
         working-directory: terraform
-        run: terraform fmt -check
+        run: terraform fmt -check -recursive
 
       - name: Generate Terraform Plan
         working-directory: terraform
@@ -85,7 +85,7 @@ jobs:
         if: steps.mcp-server.outputs.mcp_available == 'true'
         uses: actions/setup-python@v6
         with:
-          python-version: '3.14'
+          python-version: '3.12'
 
       - name: Install MCP Client
         if: steps.mcp-server.outputs.mcp_available == 'true'
