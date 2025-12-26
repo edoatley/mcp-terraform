@@ -544,99 +544,204 @@ The project includes a GitHub Actions workflow that validates Terraform plans us
 
 ### AWS OIDC Setup (Optional but Recommended)
 
-To enable full Terraform plan generation and comprehensive infrastructure review, configure AWS OIDC authentication:
+To enable full Terraform plan generation and comprehensive infrastructure review, configure AWS OIDC authentication. Follow these detailed steps:
 
 #### Prerequisites
 
-1. **GitHub OIDC Provider**: Your GitHub repository must have OIDC provider configured (usually automatic)
-2. **AWS IAM Role**: Create an IAM role with appropriate permissions
-3. **GitHub Secrets**: Configure required secrets in your repository
+- AWS account with IAM permissions to create roles and policies
+- GitHub repository where you want to configure the workflow
+- AWS account ID (found in AWS Console top-right corner)
 
-#### Step 1: Create AWS IAM Role
+#### Step 1: Create AWS IAM OIDC Provider (One-Time Setup)
 
-Create an IAM role with a trust policy that allows GitHub Actions to assume it:
+If you haven't already created an OIDC provider for GitHub Actions in your AWS account, create it first:
 
-**Trust Policy**:
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Federated": "arn:aws:iam::YOUR_ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
-      },
-      "Action": "sts:AssumeRoleWithWebIdentity",
-      "Condition": {
-        "StringEquals": {
-          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
-        },
-        "StringLike": {
-          "token.actions.githubusercontent.com:sub": "repo:YOUR_GITHUB_ORG/YOUR_REPO:*"
-        }
-      }
-    }
-  ]
-}
-```
+1. **Open AWS IAM Console**:
+   - Go to https://console.aws.amazon.com/iam/
+   - Sign in to your AWS account
 
-Replace:
-- `YOUR_ACCOUNT_ID` with your AWS account ID
-- `YOUR_GITHUB_ORG` with your GitHub organization or username
-- `YOUR_REPO` with your repository name
+2. **Navigate to Identity Providers**:
+   - In the left sidebar, click **Identity providers**
+   - Click **Add provider**
 
-**Permissions Policy** (read-only for plan operations):
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "ec2:DescribeVpcs",
-        "ec2:DescribeSubnets",
-        "ec2:DescribeAvailabilityZones",
-        "ec2:DescribeSecurityGroups"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-```
+3. **Configure OIDC Provider**:
+   - **Provider type**: Select **OpenID Connect**
+   - **Provider URL**: Enter `https://token.actions.githubusercontent.com`
+   - **Audience**: Enter `sts.amazonaws.com`
+   - Click **Add provider**
 
-**Note**: This policy provides minimal read-only permissions needed for Terraform data sources. The workflow only runs `terraform plan` (no apply), so write permissions are not required.
+4. **Note the Provider ARN**:
+   - After creation, note the ARN (format: `arn:aws:iam::YOUR_ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com`) - in my case `arn:aws:iam::793976186123:oidc-provider/token.actions.githubusercontent.com`
+   - You'll need this for the trust policy
 
-#### Step 2: Configure GitHub Secrets
+**Note**: This is a one-time setup per AWS account. If you already have this provider, skip to Step 2.
 
-1. Go to your repository settings → Secrets and variables → Actions
-2. Add a new secret:
-   - **Name**: `AWS_ROLE_ARN`
-   - **Value**: The ARN of the IAM role you created (e.g., `arn:aws:iam::123456789012:role/github-actions-terraform`)
+#### Step 2: Get Your GitHub Repository Information
 
-#### Step 3: Configure GitHub Variables (Optional)
+You'll need:
+- **GitHub Organization/Username**: Your GitHub username or organization name
+- **Repository Name**: The name of your repository
+- **AWS Account ID**: Found in AWS Console (top-right corner)
 
-1. Go to your repository settings → Secrets and variables → Actions → Variables tab
-2. Add a new variable:
-   - **Name**: `AWS_REGION`
-   - **Value**: Your AWS region (e.g., `eu-west-2`)
+Example:
+- Organization: `edoatley`
+- Repository: `mcp-terraform`
+- AWS Account ID: `123456789012`
 
-If not set, the workflow defaults to `eu-west-2`.
+#### Step 3: Create IAM Role with Trust Policy
 
-#### Verification
+1. **Open AWS IAM Console**:
+   - Go to https://console.aws.amazon.com/iam/
+   - Click **Roles** in the left sidebar
+   - Click **Create role**
 
-After configuration:
-- The workflow will authenticate to AWS using OIDC
-- Terraform plan will generate successfully with all resources
-- MCP validation will analyze the complete infrastructure plan
-- Validation reports will include resource-level analysis
+2. **Select Trusted Entity Type**:
+   - Select **Web identity**
+   - Under **Identity provider**, select `token.actions.githubusercontent.com`
+   - If not listed, you need to complete Step 1 first
+
+3. **Configure Trust Policy**:
+   - **Audience**: Select `sts.amazonaws.com`
+   - **GitHub organization**: Enter your GitHub organization or username
+   - **Repository name**: Enter your repository name (e.g., `mcp-terraform`)
+   - Click **Next**
+
+4. **Add Permissions** (we'll create a custom policy):
+   - Click **Create policy** (opens in new tab)
+   - Switch to **JSON** tab
+   - Paste the following policy:
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Effect": "Allow",
+         "Action": [
+           "ec2:DescribeVpcs",
+           "ec2:DescribeSubnets",
+           "ec2:DescribeAvailabilityZones",
+           "ec2:DescribeSecurityGroups"
+         ],
+         "Resource": "*"
+       }
+     ]
+   }
+   ```
+   - Click **Next**
+   - **Policy name**: Enter `GitHubActionsTerraformPlanReadOnly`
+   - **Description**: Enter `Read-only permissions for Terraform plan operations in GitHub Actions`
+   - Click **Create policy**
+   - Close the policy creation tab
+
+5. **Attach Policy to Role**:
+   - Return to the role creation tab
+   - Click the refresh icon
+   - Search for `GitHubActionsTerraformPlanReadOnly`
+   - Select the policy
+   - Click **Next**
+
+6. **Name and Create Role**:
+   - **Role name**: Enter `github-actions-terraform-mcp` (or your preferred name)
+   - **Description**: Enter `IAM role for GitHub Actions Terraform MCP validation workflow`
+   - Click **Create role**
+
+7. **Copy Role ARN**:
+   - After creation, click on the role name
+   - Copy the **Role ARN** (format: `arn:aws:iam::123456789012:role/github-actions-terraform-mcp`) - in this case `arn:aws:iam::793976186123:role/github-actions-terraform-mcp`
+   - You'll need this for GitHub secrets
+
+#### Step 4: Configure GitHub Repository Secret
+
+1. **Navigate to Repository Settings**:
+   - Go to your GitHub repository
+   - Click **Settings** (top menu bar)
+   - In the left sidebar, click **Secrets and variables** → **Actions**
+
+2. **Add New Secret**:
+   - Click **New repository secret**
+   - **Name**: Enter `AWS_ROLE_ARN` (exactly as shown, case-sensitive)
+   - **Secret**: Paste the Role ARN you copied in Step 3
+     - Example: `arn:aws:iam::123456789012:role/github-actions-terraform-mcp`
+   - Click **Add secret**
+
+3. **Verify Secret**:
+   - You should see `AWS_ROLE_ARN` listed in your secrets
+   - The value will be masked (shown as `••••••••`)
+
+#### Step 5: Configure GitHub Repository Variable (Optional)
+
+1. **Navigate to Variables Tab**:
+   - In the same **Secrets and variables** → **Actions** page
+   - Click the **Variables** tab
+   - Click **New repository variable**
+
+2. **Add AWS Region Variable**:
+   - **Name**: Enter `AWS_REGION` (exactly as shown, case-sensitive)
+   - **Value**: Enter your AWS region (e.g., `eu-west-2` for London)
+   - Click **Add variable**
+
+**Note**: If you don't set this variable, the workflow defaults to `eu-west-2`. Common regions:
+- `us-east-1` (N. Virginia)
+- `us-west-2` (Oregon)
+- `eu-west-1` (Ireland)
+- `eu-west-2` (London)
+- `ap-southeast-1` (Singapore)
+
+#### Step 6: Verify Configuration
+
+1. **Check Workflow Permissions**:
+   - The workflow file already has `id-token: write` permission (required for OIDC)
+   - No additional changes needed
+
+2. **Test the Workflow**:
+   - Make a small change to a Terraform file (or create a test PR)
+   - Push the change or create a pull request
+   - The workflow will automatically run
+
+3. **Verify Authentication**:
+   - In the workflow run, check the "Configure AWS Credentials" step
+   - You should see: `✓ AWS credentials configured via OIDC`
+   - The "Generate Terraform Plan" step should show: `✓ Terraform plan generated successfully`
+
+4. **Check Validation Report**:
+   - If it's a PR, check the PR comments for the validation report
+   - The report should include resource-level analysis (not just provider info)
+   - Resource types and changes should be listed
+
+#### Troubleshooting
+
+**Issue: "Plan failed despite AWS credentials being configured"**
+
+- **Check IAM Role Permissions**: Ensure the policy includes all required EC2 describe permissions
+- **Verify Trust Policy**: Check that the repository name matches exactly (case-sensitive)
+- **Check AWS Region**: Verify the region variable matches your Terraform configuration
+- **Review Plan Output**: Check the workflow logs for specific AWS API errors
+
+**Issue: "OIDC authentication fails"**
+
+- **Verify OIDC Provider**: Ensure `token.actions.githubusercontent.com` exists in IAM Identity Providers
+- **Check Trust Policy**: Verify the repository path in the trust policy matches your repo
+- **Verify Secret**: Ensure `AWS_ROLE_ARN` secret is set correctly (check for typos)
+
+**Issue: "Workflow step skipped"**
+
+- **Check Secret**: Ensure `AWS_ROLE_ARN` secret exists and is not empty
+- **Verify Syntax**: The workflow uses `if: ${{ secrets.AWS_ROLE_ARN }}` - secret must be set
+
+**Issue: "Insufficient permissions"**
+
+- **Review IAM Policy**: The provided policy is minimal - you may need additional permissions if your Terraform uses other AWS services
+- **Check CloudTrail**: Review CloudTrail logs to see which API calls are being denied
+- **Expand Policy**: Add required read-only permissions for other services (e.g., `s3:ListBucket`, `dynamodb:DescribeTable`)
 
 #### Fallback Mode
 
 If AWS credentials are not configured:
-- The workflow will skip authentication
-- Terraform plan may fail (expected)
+- The workflow will skip the authentication step
+- Terraform plan may fail (expected due to data sources)
 - Provider validation will use fallback methods (extract from `.tf` files)
 - Basic validation reports will still be generated
+- This allows the workflow to work without AWS setup, but with limited functionality
 
 ### Workflow Triggers
 
