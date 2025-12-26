@@ -76,8 +76,27 @@ jobs:
       - name: Generate Terraform Plan
         working-directory: terraform
         run: |
-          terraform plan -out=tfplan.binary -no-color > plan_output.txt || true
-          terraform show -json tfplan.binary > ../tfplan.json || echo "{}" > ../tfplan.json
+          echo "Generating Terraform plan..."
+          PLAN_EXIT_CODE=0
+          terraform plan -out=tfplan.binary -no-color -refresh=false > plan_output.txt 2>&1 || PLAN_EXIT_CODE=$?
+          
+          if [ $PLAN_EXIT_CODE -ne 0 ]; then
+            echo "⚠️ Warning: terraform plan exited with code $PLAN_EXIT_CODE"
+            echo "This is expected in CI when AWS credentials are not available."
+            echo "The plan may be empty, but provider extraction will use fallback methods."
+            cat plan_output.txt | tail -20
+          else
+            echo "✓ Terraform plan generated successfully"
+          fi
+          
+          if [ -f tfplan.binary ]; then
+            echo "Converting plan to JSON..."
+            terraform show -json tfplan.binary > ../tfplan.json
+            echo "✓ Plan JSON generated"
+          else
+            echo "⚠️ Warning: Plan binary file not created, creating empty JSON"
+            echo "{}" > ../tfplan.json
+          fi
 
       - name: Setup Python
         if: steps.mcp-server.outputs.mcp_available == 'true'
@@ -94,7 +113,17 @@ jobs:
         env:
           MCP_AVAILABLE: ${{ steps.mcp-server.outputs.mcp_available }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python scripts/validate_terraform.py
+          DEBUG: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          echo "Running Terraform MCP validation..."
+          python scripts/validate_terraform.py
+          echo ""
+          echo "=== Validation Report ==="
+          if [ -f mcp_validation_report.txt ]; then
+            cat mcp_validation_report.txt
+          else
+            echo "⚠️ Validation report not generated"
+          fi
 
       - name: Comment on PR
         if: github.event_name == 'pull_request' && steps.mcp-server.outputs.mcp_available == 'true'
