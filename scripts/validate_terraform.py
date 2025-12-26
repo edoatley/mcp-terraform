@@ -80,9 +80,16 @@ def send_mcp_request(method: str, params: Dict[str, Any] = None) -> Dict[str, An
             # Check for JSON-RPC errors
             if "error" in response:
                 error = response["error"]
-                logger.error(f"MCP server error: {error.get('code', 'unknown')} - {error.get('message', 'unknown error')}")
-                if "data" in error:
-                    logger.debug(f"Error data: {error['data']}")
+                error_code = error.get('code', 'unknown')
+                error_message = error.get('message', 'unknown error')
+                
+                # Suppress non-critical errors (like notifications/initialized not found)
+                if error_code == -32601 and "notifications/initialized" in error_message:
+                    logger.debug(f"MCP server: {error_message} (not critical, ignoring)")
+                else:
+                    logger.error(f"MCP server error: {error_code} - {error_message}")
+                    if "data" in error:
+                        logger.debug(f"Error data: {error['data']}")
                 return {}
             
             result = response.get("result", {})
@@ -122,12 +129,8 @@ def initialize_mcp() -> bool:
     
     if "capabilities" in result:
         logger.info("MCP server initialized successfully")
-        # Send initialized notification (MCP protocol requirement)
-        # Note: Some MCP servers don't require this, so we'll ignore errors
-        try:
-            send_mcp_request("notifications/initialized", {})
-        except:
-            pass  # Ignore if notification fails
+        # Note: Some MCP servers don't support notifications/initialized
+        # This is not critical for our use case, so we ignore errors
         return True
     else:
         logger.warning("Failed to initialize MCP server - capabilities not found in response")
@@ -501,6 +504,7 @@ def analyze_plan_resources(plan_path: str) -> Dict[str, Any]:
         }
         
         resources = []
+        resource_types = set()
         
         for change in resource_changes:
             actions_list = change.get("change", {}).get("actions", [])
@@ -510,6 +514,8 @@ def analyze_plan_resources(plan_path: str) -> Dict[str, Any]:
             
             resource_type = change.get("type", "unknown")
             resource_name = change.get("name", "unknown")
+            resource_types.add(resource_type)
+            
             resources.append({
                 "type": resource_type,
                 "name": resource_name,
@@ -519,7 +525,8 @@ def analyze_plan_resources(plan_path: str) -> Dict[str, Any]:
         return {
             "actions": actions,
             "resources": resources,
-            "total_resources": len(resources)
+            "total_resources": len(resources),
+            "resource_types": sorted(list(resource_types))
         }
         
     except Exception as e:
@@ -527,8 +534,73 @@ def analyze_plan_resources(plan_path: str) -> Dict[str, Any]:
         return {
             "actions": {},
             "resources": [],
-            "total_resources": 0
+            "total_resources": 0,
+            "resource_types": []
         }
+
+
+def validate_resource_configuration(namespace: str, provider: str, resource_type: str) -> Optional[Dict[str, Any]]:
+    """Validate a resource type configuration using MCP server."""
+    logger.debug(f"Validating resource type: {resource_type}")
+    
+    # Extract provider from resource type (e.g., "aws_s3_bucket" -> "aws")
+    provider_match = re.match(r'^(\w+)_', resource_type)
+    if not provider_match:
+        return None
+    
+    # Get resource documentation
+    resource_name = resource_type.replace(f"{provider_match.group(1)}_", "")
+    docs = get_resource_docs(namespace, provider_match.group(1), resource_name)
+    
+    if docs:
+        return {
+            "resource_type": resource_type,
+            "documentation_available": True,
+            "docs": docs
+        }
+    
+    return {
+        "resource_type": resource_type,
+        "documentation_available": False
+    }
+
+
+def analyze_resource_best_practices(resources: List[Dict[str, Any]], providers: List[Dict[str, str]]) -> List[str]:
+    """Analyze resources for common best practices and issues."""
+    recommendations = []
+    
+    # Group resources by type
+    resource_by_type = {}
+    for resource in resources:
+        resource_type = resource.get("type", "unknown")
+        if resource_type not in resource_by_type:
+            resource_by_type[resource_type] = []
+        resource_by_type[resource_type].append(resource)
+    
+    # Check for common AWS resource patterns
+    aws_provider = next((p for p in providers if p.get("name") == "aws"), None)
+    if aws_provider:
+        # Check for S3 buckets without versioning
+        if "aws_s3_bucket" in resource_by_type:
+            s3_resources = resource_by_type["aws_s3_bucket"]
+            recommendations.append(f"Found {len(s3_resources)} S3 bucket(s) - ensure versioning and encryption are configured")
+        
+        # Check for Lambda functions
+        if "aws_lambda_function" in resource_by_type:
+            lambda_resources = resource_by_type["aws_lambda_function"]
+            recommendations.append(f"Found {len(lambda_resources)} Lambda function(s) - review timeout and memory settings")
+        
+        # Check for DynamoDB tables
+        if "aws_dynamodb_table" in resource_by_type:
+            dynamodb_resources = resource_by_type["aws_dynamodb_table"]
+            recommendations.append(f"Found {len(dynamodb_resources)} DynamoDB table(s) - verify backup and encryption settings")
+        
+        # Check for IAM roles
+        if "aws_iam_role" in resource_by_type:
+            iam_resources = resource_by_type["aws_iam_role"]
+            recommendations.append(f"Found {len(iam_resources)} IAM role(s) - ensure least-privilege policies are applied")
+    
+    return recommendations
 
 
 def check_plan_generation_status(plan_path: str, plan_output_path: str = "terraform/plan_output.txt") -> Tuple[bool, Optional[str]]:
@@ -602,6 +674,9 @@ def main():
     logger.info("Analyzing Terraform plan...")
     plan_analysis = analyze_plan_resources(plan_path)
     
+    # Check if plan has actual resources (not empty)
+    plan_has_resources = plan_analysis['total_resources'] > 0
+    
     # Generate validation report
     report_lines = [
         "# Terraform MCP Validation Report\n",
@@ -612,8 +687,19 @@ def main():
         f"  - Update: {plan_analysis['actions'].get('update', 0)}\n",
         f"  - Delete: {plan_analysis['actions'].get('delete', 0)}\n",
         f"  - Replace: {plan_analysis['actions'].get('replace', 0)}\n",
-        f"\n## Provider Validation\n"
     ]
+    
+    # Add resource types if plan has resources
+    if plan_has_resources and plan_analysis.get('resource_types'):
+        report_lines.append(f"\n### Resource Types in Plan\n")
+        report_lines.append(f"- {len(plan_analysis['resource_types'])} unique resource type(s):\n")
+        for resource_type in plan_analysis['resource_types'][:10]:  # Limit to first 10
+            report_lines.append(f"  - `{resource_type}`\n")
+        if len(plan_analysis['resource_types']) > 10:
+            report_lines.append(f"  - ... and {len(plan_analysis['resource_types']) - 10} more\n")
+        report_lines.append("\n")
+    
+    report_lines.append("## Provider Validation\n")
     
     if not providers:
         report_lines.append("⚠️ **Warning**: No providers found in plan.\n\n")
@@ -651,6 +737,38 @@ def main():
             
             report_lines.append("\n")
     
+    # Add resource-level analysis if plan has resources
+    if plan_has_resources and providers:
+        report_lines.append("## Resource Analysis\n")
+        
+        # Analyze best practices
+        recommendations = analyze_resource_best_practices(plan_analysis['resources'], providers)
+        if recommendations:
+            report_lines.append("### Recommendations\n")
+            for rec in recommendations:
+                report_lines.append(f"- {rec}\n")
+            report_lines.append("\n")
+        
+        # Show resource changes summary
+        if plan_analysis['resources']:
+            report_lines.append("### Resource Changes\n")
+            # Group by action type
+            by_action = {"create": [], "update": [], "delete": [], "replace": []}
+            for resource in plan_analysis['resources']:
+                actions = resource.get("actions", [])
+                for action in actions:
+                    if action in by_action:
+                        by_action[action].append(resource)
+            
+            for action, resources_list in by_action.items():
+                if resources_list:
+                    report_lines.append(f"\n**{action.upper()}** ({len(resources_list)} resource(s)):\n")
+                    for resource in resources_list[:5]:  # Show first 5
+                        report_lines.append(f"- `{resource['type']}.{resource['name']}`\n")
+                    if len(resources_list) > 5:
+                        report_lines.append(f"- ... and {len(resources_list) - 5} more\n")
+            report_lines.append("\n")
+    
     # Write report
     report_content = "".join(report_lines)
     with open("mcp_validation_report.txt", "w") as f:
@@ -662,10 +780,51 @@ def main():
     # Create AI analysis
     if plan_analysis['total_resources'] > 0:
         resource_summary = f"{plan_analysis['total_resources']} resource changes"
+        action_summary = []
+        if plan_analysis['actions'].get('create', 0) > 0:
+            action_summary.append(f"{plan_analysis['actions']['create']} to create")
+        if plan_analysis['actions'].get('update', 0) > 0:
+            action_summary.append(f"{plan_analysis['actions']['update']} to update")
+        if plan_analysis['actions'].get('delete', 0) > 0:
+            action_summary.append(f"{plan_analysis['actions']['delete']} to delete")
+        if plan_analysis['actions'].get('replace', 0) > 0:
+            action_summary.append(f"{plan_analysis['actions']['replace']} to replace")
+        
+        action_text = ", ".join(action_summary) if action_summary else "no changes"
+        
+        ai_analysis = f"""## Terraform Plan Analysis
+
+This plan includes:
+- {resource_summary} ({action_text})
+- {len(plan_analysis.get('resource_types', []))} unique resource type(s)
+- Provider validation completed via HashiCorp MCP Server
+
+### Infrastructure Changes:
+"""
+        if plan_analysis.get('resource_types'):
+            ai_analysis += "- Resource types: " + ", ".join(plan_analysis['resource_types'][:5])
+            if len(plan_analysis['resource_types']) > 5:
+                ai_analysis += f", and {len(plan_analysis['resource_types']) - 5} more"
+            ai_analysis += "\n"
+        
+        ai_analysis += """
+### Recommendations:
+1. Review provider versions to ensure you're using the latest stable versions
+2. Consider using recommended modules from the Terraform Registry
+3. Verify all resource configurations match the latest provider documentation
+4. Review resource changes carefully before applying
+"""
+        
+        # Add best practice recommendations
+        if providers:
+            recommendations = analyze_resource_best_practices(plan_analysis['resources'], providers)
+            if recommendations:
+                ai_analysis += "\n### Best Practices:\n"
+                for rec in recommendations:
+                    ai_analysis += f"- {rec}\n"
     else:
         resource_summary = "No resource changes (plan may be empty or failed)"
-    
-    ai_analysis = f"""## Terraform Plan Analysis
+        ai_analysis = f"""## Terraform Plan Analysis
 
 This plan includes:
 - {resource_summary}
@@ -676,7 +835,7 @@ This plan includes:
 2. Consider using recommended modules from the Terraform Registry
 3. Verify all resource configurations match the latest provider documentation
 
-*Note: This is a basic analysis. For more detailed insights, integrate with GitHub Models API.*
+*Note: If the plan is empty, this may indicate missing AWS credentials. Configure AWS OIDC authentication to enable full plan generation.*
 """
     
     with open("ai_analysis.txt", "w") as f:
