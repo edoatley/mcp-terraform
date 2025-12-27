@@ -74,11 +74,10 @@ jobs:
         run: terraform fmt -check -recursive
 
       - name: Configure AWS Credentials
-        if: ${{ secrets.AWS_ROLE_ARN }}
         uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION || 'eu-west-2' }}
+          aws-region: ${{ vars.AWS_REGION }}
           role-session-name: terraform-mcp-validation-${{ github.run_id }}
 
       - name: Generate Terraform Plan
