@@ -59,6 +59,7 @@ ai_analysis.txt
 # Gradle
 .gradle/
 build/
+!gradle/wrapper/gradle-wrapper.jar
 
 # JaCoCo Coverage Reports
 **/jacoco.exec
