@@ -59,12 +59,6 @@ ai_analysis.txt
 # Gradle
 .gradle/
 build/
-gradlew
-gradlew.bat
-gradle.properties
-gradle.kts
-gradle.settings
-gradle.settings.kts
 
 # JaCoCo Coverage Reports
 **/jacoco.exec
