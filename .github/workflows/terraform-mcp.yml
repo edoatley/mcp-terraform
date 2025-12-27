@@ -77,7 +77,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION }}
           role-session-name: terraform-mcp-validation-${{ github.run_id }}
 
       - name: Generate Terraform Plan
