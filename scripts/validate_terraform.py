@@ -416,6 +416,7 @@ def extract_providers_from_plan(plan_path: str, terraform_dir: str = "terraform"
         is_valid, error_msg = validate_plan_structure(plan, plan_path)
         if not is_valid:
             logger.warning(f"Plan validation failed: {error_msg}")
+            logger.info("This is expected if terraform plan failed (e.g., missing AWS credentials).")
             logger.info("Attempting to extract providers from Terraform files as fallback...")
             return extract_providers_from_terraform_files(terraform_dir)
         
@@ -647,6 +648,7 @@ def main():
     plan_status_ok, plan_error = check_plan_generation_status(plan_path)
     if not plan_status_ok and plan_error:
         logger.warning(plan_error)
+        logger.info("Validation will continue using fallback methods (extracting providers from Terraform files).")
     
     # Initialize MCP server
     logger.info("Initializing MCP server connection...")
@@ -702,9 +704,9 @@ def main():
     report_lines.append("## Provider Validation\n")
     
     if not providers:
-        report_lines.append("⚠️ **Warning**: No providers found in plan.\n\n")
+        report_lines.append("⚠️ **Note**: No providers found in plan.\n\n")
         report_lines.append("This usually indicates that `terraform plan` failed (e.g., missing AWS credentials).\n")
-        report_lines.append("Provider validation was skipped.\n\n")
+        report_lines.append("Provider validation was attempted using fallback methods but no providers were found.\n\n")
     else:
         for provider in providers:
             namespace = provider["namespace"]
