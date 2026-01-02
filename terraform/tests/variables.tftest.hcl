@@ -30,9 +30,9 @@ run "lambda_variables_defaults" {
   command = plan
 
   variables {
-    project_name      = "mcp-terraform-todo"
+    project_name       = "mcp-terraform-todo"
     lambda_memory_size = 512
-    lambda_timeout    = 30
+    lambda_timeout     = 30
   }
 
   assert {
@@ -50,11 +50,11 @@ run "custom_variables" {
   command = plan
 
   variables {
-    project_name      = "custom-project"
-    aws_region        = "us-east-1"
-    environment       = "prod"
+    project_name       = "custom-project"
+    aws_region         = "us-east-1"
+    environment        = "prod"
     lambda_memory_size = 1024
-    lambda_timeout    = 60
+    lambda_timeout     = 60
   }
 
   assert {

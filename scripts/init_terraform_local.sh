@@ -55,3 +55,5 @@ echo ""
 echo "You can now run tests with:"
 echo "  ./scripts/run_terraform_tests.sh"
 
+
+

@@ -15,13 +15,33 @@ NC='\033[0m' # No Color
 echo -e "${GREEN}=== Terraform Test Runner ===${NC}"
 echo ""
 echo -e "${YELLOW}Step 0: Cleaning up AWS credential environment variables...${NC}"
-unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_DEFAULT_REGION AWS_REGION
-echo "✓ Cleared AWS credential environment variables"
+
+# In CI environments (like GitHub Actions), preserve OIDC credentials
+# Check if we're in CI and have OIDC credentials set
+if [[ -n "$CI" ]] || [[ -n "$GITHUB_ACTIONS" ]]; then
+  if [[ -n "$AWS_ACCESS_KEY_ID" ]] || [[ -n "$AWS_ROLE_ARN" ]]; then
+    echo "✓ Running in CI with OIDC credentials - preserving credentials"
+    # Don't unset credentials in CI when using OIDC
+  else
+    # CI but no OIDC credentials, proceed with cleanup
+    unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_DEFAULT_REGION AWS_REGION
+    echo "✓ Cleared AWS credential environment variables"
+  fi
+else
+  # Local environment - always clean up to use SSO profiles
+  unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_DEFAULT_REGION AWS_REGION
+  echo "✓ Cleared AWS credential environment variables"
+fi
 
 # Default profile (export so Terraform inherits)
-AWS_PROFILE="${AWS_PROFILE:-sandbox}"
-export AWS_PROFILE
-echo "✓ Using AWS profile: $AWS_PROFILE"
+# Only set default profile if not in CI with OIDC
+if [[ -z "$CI" ]] || [[ -z "$AWS_ACCESS_KEY_ID" ]]; then
+  AWS_PROFILE="${AWS_PROFILE:-sandbox}"
+  export AWS_PROFILE
+  echo "✓ Using AWS profile: $AWS_PROFILE"
+else
+  echo "✓ Using OIDC credentials (no profile needed)"
+fi
 echo ""
 
 # Step 1: Set AWS SDK config for SSO support

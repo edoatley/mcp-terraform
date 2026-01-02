@@ -1,0 +1,91 @@
+name: Test Suite
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  gradle-tests:
+    name: Gradle Build & API Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Make scripts executable
+        run: chmod +x scripts/run_api_tests.sh
+
+      - name: Run Gradle Build Test
+        run: ./gradlew build -x apiTest
+
+      - name: Run API Tests (Gradle)
+        env:
+          API_BASE_URL: http://localhost:8080
+          GRPC_HOST: localhost
+          GRPC_PORT: 9090
+        run: ./scripts/run_api_tests.sh
+
+  maven-tests:
+    name: Maven Build & API Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Make scripts executable
+        run: chmod +x scripts/run_api_tests_maven.sh
+
+      - name: Run Maven Build Test
+        run: ./mvnw clean compile -DskipTests
+
+      - name: Run API Tests (Maven)
+        env:
+          API_BASE_URL: http://localhost:8080
+          GRPC_HOST: localhost
+          GRPC_PORT: 9090
+        run: ./scripts/run_api_tests_maven.sh
+
+  terraform-tests:
+    name: Terraform Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-session-name: terraform-tests-${{ github.run_id }}
+
+      - name: Make scripts executable
+        run: chmod +x scripts/run_terraform_tests.sh
+
+      - name: Run Terraform Tests
+        env:
+          CI: true
+          AWS_SDK_LOAD_CONFIG: 1
+        run: ./scripts/run_terraform_tests.sh
+
