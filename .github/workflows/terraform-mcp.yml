@@ -12,6 +12,7 @@ on:
       - 'terraform/**'
       - '.github/workflows/terraform-mcp.yml'
 
+      
 permissions:
   contents: read
   pull-requests: write
