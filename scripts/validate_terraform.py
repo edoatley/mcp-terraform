@@ -271,6 +271,28 @@ def get_resource_docs(namespace: str, provider: str, resource: str) -> Optional[
     return None
 
 
+def normalize_provider_name(name: str) -> str:
+    """Normalize a provider name to its base form.
+    
+    Examples:
+    - "aws" -> "aws"
+    - "aws.us-east-1" -> "aws"
+    - "aws_api_gateway" -> "aws" (extract base provider from resource type-like names)
+    """
+    # Remove region/alias suffixes (e.g., "aws.us-east-1" -> "aws")
+    base_name = name.split('.')[0] if '.' in name else name
+    
+    # If it looks like a resource type (has underscores), extract the first part
+    # This handles cases where resource types might be incorrectly used as provider names
+    if '_' in base_name:
+        parts = base_name.split('_')
+        # Only use the first part if it's a valid provider name (2-10 chars, lowercase)
+        if len(parts[0]) >= 2 and len(parts[0]) <= 10 and parts[0].islower():
+            return parts[0]
+    
+    return base_name
+
+
 def extract_providers_from_terraform_files(terraform_dir: str = "terraform") -> List[Dict[str, str]]:
     """Extract providers from Terraform files by parsing required_providers blocks."""
     providers = []
@@ -334,7 +356,11 @@ def extract_providers_from_terraform_files(terraform_dir: str = "terraform") -> 
 
 
 def extract_providers_from_resource_types(plan: Dict[str, Any]) -> List[Dict[str, str]]:
-    """Extract provider names from resource types in the plan."""
+    """Extract provider names from resource types in the plan.
+    
+    This function extracts the base provider name from resource types.
+    For example: "aws_s3_bucket" -> "aws", "aws_api_gateway_rest_api" -> "aws"
+    """
     providers = set()
     provider_list = []
     
@@ -347,9 +373,10 @@ def extract_providers_from_resource_types(plan: Dict[str, Any]) -> List[Dict[str
         resource_type = change.get("type", "")
         if resource_type:
             # Extract provider prefix: "aws_s3_bucket" -> "aws"
-            provider_match = re.match(r'^(\w+)_', resource_type)
+            # Only match the first word before underscore to get base provider name
+            provider_match = re.match(r'^([a-z][a-z0-9]*)_', resource_type)
             if provider_match:
-                provider_name = provider_match.group(1)
+                provider_name = normalize_provider_name(provider_match.group(1))
                 if provider_name not in providers:
                     providers.add(provider_name)
                     # Default to hashicorp namespace
@@ -357,12 +384,15 @@ def extract_providers_from_resource_types(plan: Dict[str, Any]) -> List[Dict[str
                         "namespace": "hashicorp",
                         "name": provider_name
                     })
+                    logger.debug(f"Extracted provider '{provider_name}' from resource type '{resource_type}'")
     
     # Extract from planned_values.root_module.resources
     for resource in root_module.get("resources", []):
         resource_type = resource.get("type", "")
         if resource_type:
-            provider_match = re.match(r'^(\w+)_', resource_type)
+            # Extract provider prefix: "aws_s3_bucket" -> "aws"
+            # Only match the first word before underscore to get base provider name
+            provider_match = re.match(r'^([a-z][a-z0-9]*)_', resource_type)
             if provider_match:
                 provider_name = provider_match.group(1)
                 if provider_name not in providers:
@@ -371,9 +401,11 @@ def extract_providers_from_resource_types(plan: Dict[str, Any]) -> List[Dict[str
                         "namespace": "hashicorp",
                         "name": provider_name
                     })
+                    logger.debug(f"Extracted provider '{provider_name}' from resource type '{resource_type}'")
     
     if provider_list:
-        logger.info(f"Extracted {len(provider_list)} provider(s) from resource types")
+        unique_providers = {p['name'] for p in provider_list}
+        logger.info(f"Extracted {len(unique_providers)} unique provider(s) from resource types: {', '.join(sorted(unique_providers))}")
     
     return provider_list
 
@@ -427,38 +459,46 @@ def extract_providers_from_plan(plan_path: str, terraform_dir: str = "terraform"
         if provider_configs:
             logger.debug("Extracting providers from configuration.provider_configs")
             for provider_key, provider_data in provider_configs.items():
-                if provider_key not in providers:
-                    providers.add(provider_key)
-                    # Try to get namespace from provider config if available
-                    namespace = "hashicorp"  # Default
-                    
-                    # Check if provider_data has source information
-                    if isinstance(provider_data, dict):
-                        # Some plans may have full_provider_name or source
-                        full_name = provider_data.get("full_provider_name", "")
-                        if full_name and '/' in full_name:
-                            namespace, name = full_name.split('/', 1)
-                            provider_key = name
-                        else:
-                            name = provider_key
-                    else:
-                        name = provider_key
-                    
+                # Normalize provider key - remove region/alias suffixes (e.g., "aws.us-east-1" -> "aws")
+                # Provider keys in Terraform can be like "aws", "aws.us-east-1", etc.
+                base_provider_key = normalize_provider_name(provider_key)
+                
+                # Try to get namespace from provider config if available
+                namespace = "hashicorp"  # Default
+                name = base_provider_key
+                
+                # Check if provider_data has source information
+                if isinstance(provider_data, dict):
+                    # Some plans may have full_provider_name or source
+                    full_name = provider_data.get("full_provider_name", "")
+                    if full_name and '/' in full_name:
+                        namespace, name = full_name.split('/', 1)
+                        # Normalize name to base provider
+                        name = normalize_provider_name(name)
+                    # Also check for name field in provider_data
+                    elif "name" in provider_data:
+                        name = normalize_provider_name(provider_data.get("name", base_provider_key))
+                
+                provider_key_full = f"{namespace}/{name}"
+                if provider_key_full not in providers:
+                    providers.add(provider_key_full)
                     provider_list.append({
                         "namespace": namespace,
                         "name": name
                     })
                     logger.debug(f"Found provider in plan: {namespace}/{name}")
         
-        # Method 2: Extract from resource types if no providers found in config
-        if not provider_list:
-            logger.debug("No providers in config, extracting from resource types...")
-            resource_providers = extract_providers_from_resource_types(plan)
-            for provider in resource_providers:
-                provider_key = f"{provider['namespace']}/{provider['name']}"
-                if provider_key not in providers:
-                    providers.add(provider_key)
-                    provider_list.append(provider)
+        # Method 2: Extract from resource types (always run to ensure we have all providers)
+        # This should only extract the base provider name (e.g., "aws" from "aws_s3_bucket")
+        # We merge results with Method 1 to ensure completeness
+        logger.debug("Extracting providers from resource types as additional validation...")
+        resource_providers = extract_providers_from_resource_types(plan)
+        for provider in resource_providers:
+            provider_key = f"{provider['namespace']}/{provider['name']}"
+            if provider_key not in providers:
+                providers.add(provider_key)
+                provider_list.append(provider)
+                logger.debug(f"Added provider from resource types: {provider_key}")
         
         # Method 3: Fallback to Terraform files if still no providers
         if not provider_list:
@@ -470,12 +510,28 @@ def extract_providers_from_plan(plan_path: str, terraform_dir: str = "terraform"
                     providers.add(provider_key)
                     provider_list.append(provider)
         
-        if provider_list:
-            logger.info(f"Successfully extracted {len(provider_list)} provider(s) from plan")
+        # Final deduplication and normalization pass
+        final_providers = {}
+        for provider in provider_list:
+            # Normalize the provider name one more time to be safe
+            normalized_name = normalize_provider_name(provider["name"])
+            provider_key = f"{provider['namespace']}/{normalized_name}"
+            
+            if provider_key not in final_providers:
+                final_providers[provider_key] = {
+                    "namespace": provider["namespace"],
+                    "name": normalized_name
+                }
+        
+        final_list = list(final_providers.values())
+        
+        if final_list:
+            unique_names = [p['name'] for p in final_list]
+            logger.info(f"Successfully extracted {len(final_list)} unique provider(s) from plan: {', '.join(sorted(unique_names))}")
         else:
             logger.warning("No providers found using any extraction method")
         
-        return provider_list
+        return final_list
         
     except FileNotFoundError:
         logger.warning(f"Plan file not found: {plan_path}")
